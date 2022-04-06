@@ -10,9 +10,14 @@
 import * as React from 'react';
 import {Component, Suspense} from 'react';
 import Store from 'react-devtools-shared/src/devtools/store';
+import UnsupportedBridgeOperationView from './UnsupportedBridgeOperationView';
 import ErrorView from './ErrorView';
 import SearchingGitHubIssues from './SearchingGitHubIssues';
 import SuspendingErrorView from './SuspendingErrorView';
+import TimeoutView from './TimeoutView';
+import UnsupportedBridgeOperationError from 'react-devtools-shared/src/UnsupportedBridgeOperationError';
+import TimeoutError from 'react-devtools-shared/src/TimeoutError';
+import {logEvent} from 'react-devtools-shared/src/Logger';
 
 type Props = {|
   children: React$Node,
@@ -27,6 +32,8 @@ type State = {|
   componentStack: string | null,
   errorMessage: string | null,
   hasError: boolean,
+  isUnsupportedBridgeOperationError: boolean,
+  isTimeout: boolean,
 |};
 
 const InitialState: State = {
@@ -35,6 +42,8 @@ const InitialState: State = {
   componentStack: null,
   errorMessage: null,
   hasError: false,
+  isUnsupportedBridgeOperationError: false,
+  isTimeout: false,
 };
 
 export default class ErrorBoundary extends Component<Props, State> {
@@ -44,14 +53,18 @@ export default class ErrorBoundary extends Component<Props, State> {
     const errorMessage =
       typeof error === 'object' &&
       error !== null &&
-      error.hasOwnProperty('message')
+      typeof error.message === 'string'
         ? error.message
-        : '' + error;
+        : null;
+
+    const isTimeout = error instanceof TimeoutError;
+    const isUnsupportedBridgeOperationError =
+      error instanceof UnsupportedBridgeOperationError;
 
     const callStack =
       typeof error === 'object' &&
       error !== null &&
-      error.hasOwnProperty('stack')
+      typeof error.stack === 'string'
         ? error.stack
             .split('\n')
             .slice(1)
@@ -62,10 +75,13 @@ export default class ErrorBoundary extends Component<Props, State> {
       callStack,
       errorMessage,
       hasError: true,
+      isUnsupportedBridgeOperationError,
+      isTimeout,
     };
   }
 
   componentDidCatch(error: any, {componentStack}: any) {
+    this._logError(error, componentStack);
     this.setState({
       componentStack,
     });
@@ -93,30 +109,65 @@ export default class ErrorBoundary extends Component<Props, State> {
       componentStack,
       errorMessage,
       hasError,
+      isUnsupportedBridgeOperationError,
+      isTimeout,
     } = this.state;
 
     if (hasError) {
-      return (
-        <ErrorView
-          callStack={callStack}
-          componentStack={componentStack}
-          dismissError={
-            canDismissProp || canDismissState ? this._dismissError : null
-          }
-          errorMessage={errorMessage}>
-          <Suspense fallback={<SearchingGitHubIssues />}>
-            <SuspendingErrorView
-              callStack={callStack}
-              componentStack={componentStack}
-              errorMessage={errorMessage}
-            />
-          </Suspense>
-        </ErrorView>
-      );
+      if (isTimeout) {
+        return (
+          <TimeoutView
+            callStack={callStack}
+            componentStack={componentStack}
+            dismissError={
+              canDismissProp || canDismissState ? this._dismissError : null
+            }
+            errorMessage={errorMessage}
+          />
+        );
+      } else if (isUnsupportedBridgeOperationError) {
+        return (
+          <UnsupportedBridgeOperationView
+            callStack={callStack}
+            componentStack={componentStack}
+            errorMessage={errorMessage}
+          />
+        );
+      } else {
+        return (
+          <ErrorView
+            callStack={callStack}
+            componentStack={componentStack}
+            dismissError={
+              canDismissProp || canDismissState ? this._dismissError : null
+            }
+            errorMessage={errorMessage}
+            isUnsupportedBridgeOperationError={
+              isUnsupportedBridgeOperationError
+            }>
+            <Suspense fallback={<SearchingGitHubIssues />}>
+              <SuspendingErrorView
+                callStack={callStack}
+                componentStack={componentStack}
+                errorMessage={errorMessage}
+              />
+            </Suspense>
+          </ErrorView>
+        );
+      }
     }
 
     return children;
   }
+
+  _logError = (error: any, componentStack: string | null) => {
+    logEvent({
+      event_name: 'error',
+      error_message: error.message ?? null,
+      error_stack: error.stack ?? null,
+      error_component_stack: componentStack ?? null,
+    });
+  };
 
   _dismissError = () => {
     const onBeforeDismissCallback = this.props.onBeforeDismissCallback;
@@ -129,6 +180,7 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   _onStoreError = (error: Error) => {
     if (!this.state.hasError) {
+      this._logError(error, null);
       this.setState({
         ...ErrorBoundary.getDerivedStateFromError(error),
         canDismiss: true,

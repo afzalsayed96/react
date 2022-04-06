@@ -8,6 +8,7 @@
  */
 
 import type {ReactModel} from 'react-server/src/ReactFlightServer';
+import type {ServerContextJSONValue} from 'shared/ReactTypes';
 import type {BundlerConfig} from './ReactFlightServerWebpackBundlerConfig';
 
 import {
@@ -24,23 +25,25 @@ function renderToReadableStream(
   model: ReactModel,
   webpackMap: BundlerConfig,
   options?: Options,
+  context?: Array<[string, ServerContextJSONValue]>,
 ): ReadableStream {
-  let request;
-  return new ReadableStream({
+  const request = createRequest(
+    model,
+    webpackMap,
+    options ? options.onError : undefined,
+    context,
+  );
+  const stream = new ReadableStream({
+    type: 'bytes',
     start(controller) {
-      request = createRequest(
-        model,
-        controller,
-        webpackMap,
-        options ? options.onError : undefined,
-      );
       startWork(request);
     },
     pull(controller) {
-      startFlowing(request);
+      startFlowing(request, controller);
     },
     cancel(reason) {},
   });
+  return stream;
 }
 
 export {renderToReadableStream};

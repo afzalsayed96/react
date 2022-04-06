@@ -9,9 +9,17 @@ const {getArtifactsList, logPromise} = require('../utils');
 const theme = require('../theme');
 
 const run = async ({build, cwd, releaseChannel}) => {
+  const CIRCLE_TOKEN = process.env.CIRCLE_CI_API_TOKEN;
+  if (!CIRCLE_TOKEN) {
+    console.error(
+      theme.error('Missing required environment variable: CIRCLE_CI_API_TOKEN')
+    );
+    process.exit(1);
+  }
+
   const artifacts = await getArtifactsList(build);
   const buildArtifacts = artifacts.find(entry =>
-    entry.path.endsWith('build2.tgz')
+    entry.path.endsWith('build.tgz')
   );
 
   if (!buildArtifacts) {
@@ -22,9 +30,9 @@ const run = async ({build, cwd, releaseChannel}) => {
   }
 
   // Download and extract artifact
-  await exec(`rm -rf ./build2`, {cwd});
+  await exec(`rm -rf ./build`, {cwd});
   await exec(
-    `curl -L $(fwdproxy-config curl) ${buildArtifacts.url} | tar -xvz`,
+    `curl -L $(fwdproxy-config curl) ${buildArtifacts.url} -H "Circle-Token: ${CIRCLE_TOKEN}" | tar -xvz`,
     {
       cwd,
     }
@@ -50,7 +58,7 @@ const run = async ({build, cwd, releaseChannel}) => {
     console.error('Internal error: Invalid release channel: ' + releaseChannel);
     process.exit(releaseChannel);
   }
-  await exec(`cp -r ./build2/${sourceDir} ./build/node_modules`, {cwd});
+  await exec(`cp -r ./build/${sourceDir} ./build/node_modules`, {cwd});
 };
 
 module.exports = async ({build, commit, cwd, releaseChannel}) => {

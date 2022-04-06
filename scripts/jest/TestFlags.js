@@ -42,6 +42,8 @@ const environmentFlags = {
   // Similarly, should stable imply "classic"?
   stable: !__EXPERIMENTAL__,
 
+  variant: __VARIANT__,
+
   persistent: global.__PERSISTENT__ === true,
 
   // Use this for tests that are known to be broken.
@@ -57,6 +59,7 @@ function getTestFlags() {
   // These are required on demand because some of our tests mutate them. We try
   // not to but there are exceptions.
   const featureFlags = require('shared/ReactFeatureFlags');
+  const schedulerFeatureFlags = require('scheduler/src/SchedulerFeatureFlags');
 
   const www = global.__WWW__ === true;
   const releaseChannel = www
@@ -81,6 +84,15 @@ function getTestFlags() {
       source: !process.env.IS_BUILD,
       www,
 
+      // This isn't a flag, just a useful alias for tests.
+      enableUseSyncExternalStoreShim: !__VARIANT__,
+      enableSuspenseList: releaseChannel === 'experimental' || www,
+
+      // If there's a naming conflict between scheduler and React feature flags, the
+      // React ones take precedence.
+      // TODO: Maybe we should error on conflicts? Or we could namespace
+      // the flags
+      ...schedulerFeatureFlags,
       ...featureFlags,
       ...environmentFlags,
     },

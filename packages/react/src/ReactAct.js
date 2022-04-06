@@ -9,7 +9,6 @@
 
 import type {Thenable} from 'shared/ReactTypes';
 import ReactCurrentActQueue from './ReactCurrentActQueue';
-import invariant from 'shared/invariant';
 import enqueueTask from 'shared/enqueueTask';
 
 let actScopeDepth = 0;
@@ -151,10 +150,7 @@ export function act<T>(callback: () => T | Thenable<T>): Thenable<T> {
       }
     }
   } else {
-    invariant(
-      false,
-      'act(...) is not supported in production builds of React.',
-    );
+    throw new Error('act(...) is not supported in production builds of React.');
   }
 }
 
@@ -203,7 +199,7 @@ let isFlushing = false;
 function flushActQueue(queue) {
   if (__DEV__) {
     if (!isFlushing) {
-      // Prevent re-entrancy.
+      // Prevent re-entrance.
       isFlushing = true;
       let i = 0;
       try {

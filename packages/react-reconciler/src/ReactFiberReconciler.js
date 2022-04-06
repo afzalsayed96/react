@@ -16,17 +16,17 @@ import {enableNewReconciler} from 'shared/ReactFeatureFlags';
 
 import {
   createContainer as createContainer_old,
+  createHydrationContainer as createHydrationContainer_old,
   updateContainer as updateContainer_old,
   batchedUpdates as batchedUpdates_old,
   deferredUpdates as deferredUpdates_old,
   discreteUpdates as discreteUpdates_old,
   flushControlled as flushControlled_old,
   flushSync as flushSync_old,
-  flushSyncWithoutWarningIfAlreadyRendering as flushSyncWithoutWarningIfAlreadyRendering_old,
+  isAlreadyRendering as isAlreadyRendering_old,
   flushPassiveEffects as flushPassiveEffects_old,
   getPublicRootInstance as getPublicRootInstance_old,
   attemptSynchronousHydration as attemptSynchronousHydration_old,
-  attemptDiscreteHydration as attemptDiscreteHydration_old,
   attemptContinuousHydration as attemptContinuousHydration_old,
   attemptHydrationAtCurrentPriority as attemptHydrationAtCurrentPriority_old,
   findHostInstance as findHostInstance_old,
@@ -53,17 +53,17 @@ import {
 
 import {
   createContainer as createContainer_new,
+  createHydrationContainer as createHydrationContainer_new,
   updateContainer as updateContainer_new,
   batchedUpdates as batchedUpdates_new,
   deferredUpdates as deferredUpdates_new,
   discreteUpdates as discreteUpdates_new,
   flushControlled as flushControlled_new,
   flushSync as flushSync_new,
-  flushSyncWithoutWarningIfAlreadyRendering as flushSyncWithoutWarningIfAlreadyRendering_new,
+  isAlreadyRendering as isAlreadyRendering_new,
   flushPassiveEffects as flushPassiveEffects_new,
   getPublicRootInstance as getPublicRootInstance_new,
   attemptSynchronousHydration as attemptSynchronousHydration_new,
-  attemptDiscreteHydration as attemptDiscreteHydration_new,
   attemptContinuousHydration as attemptContinuousHydration_new,
   attemptHydrationAtCurrentPriority as attemptHydrationAtCurrentPriority_new,
   findHostInstance as findHostInstance_new,
@@ -91,6 +91,9 @@ import {
 export const createContainer = enableNewReconciler
   ? createContainer_new
   : createContainer_old;
+export const createHydrationContainer = enableNewReconciler
+  ? createHydrationContainer_new
+  : createHydrationContainer_old;
 export const updateContainer = enableNewReconciler
   ? updateContainer_new
   : updateContainer_old;
@@ -107,9 +110,9 @@ export const flushControlled = enableNewReconciler
   ? flushControlled_new
   : flushControlled_old;
 export const flushSync = enableNewReconciler ? flushSync_new : flushSync_old;
-export const flushSyncWithoutWarningIfAlreadyRendering = enableNewReconciler
-  ? flushSyncWithoutWarningIfAlreadyRendering_new
-  : flushSyncWithoutWarningIfAlreadyRendering_old;
+export const isAlreadyRendering = enableNewReconciler
+  ? isAlreadyRendering_new
+  : isAlreadyRendering_old;
 export const flushPassiveEffects = enableNewReconciler
   ? flushPassiveEffects_new
   : flushPassiveEffects_old;
@@ -119,9 +122,6 @@ export const getPublicRootInstance = enableNewReconciler
 export const attemptSynchronousHydration = enableNewReconciler
   ? attemptSynchronousHydration_new
   : attemptSynchronousHydration_old;
-export const attemptDiscreteHydration = enableNewReconciler
-  ? attemptDiscreteHydration_new
-  : attemptDiscreteHydration_old;
 export const attemptContinuousHydration = enableNewReconciler
   ? attemptContinuousHydration_new
   : attemptContinuousHydration_old;

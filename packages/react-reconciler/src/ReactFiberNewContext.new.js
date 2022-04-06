@@ -38,14 +38,15 @@ import {
   NeedsPropagation,
 } from './ReactFiberFlags';
 
-import invariant from 'shared/invariant';
 import is from 'shared/objectIs';
 import {createUpdate, ForceUpdate} from './ReactUpdateQueue.new';
 import {markWorkInProgressReceivedUpdate} from './ReactFiberBeginWork.new';
 import {
   enableSuspenseServerRenderer,
   enableLazyContextPropagation,
+  enableServerContext,
 } from 'shared/ReactFeatureFlags';
+import {REACT_SERVER_CONTEXT_DEFAULT_VALUE_NOT_LOADED} from 'shared/ReactSymbols';
 
 const valueCursor: StackCursor<mixed> = createCursor(null);
 
@@ -133,15 +134,30 @@ export function popProvider(
   const currentValue = valueCursor.current;
   pop(valueCursor, providerFiber);
   if (isPrimaryRenderer) {
-    context._currentValue = currentValue;
+    if (
+      enableServerContext &&
+      currentValue === REACT_SERVER_CONTEXT_DEFAULT_VALUE_NOT_LOADED
+    ) {
+      context._currentValue = context._defaultValue;
+    } else {
+      context._currentValue = currentValue;
+    }
   } else {
-    context._currentValue2 = currentValue;
+    if (
+      enableServerContext &&
+      currentValue === REACT_SERVER_CONTEXT_DEFAULT_VALUE_NOT_LOADED
+    ) {
+      context._currentValue2 = context._defaultValue;
+    } else {
+      context._currentValue2 = currentValue;
+    }
   }
 }
 
-export function scheduleWorkOnParentPath(
+export function scheduleContextWorkOnParentPath(
   parent: Fiber | null,
   renderLanes: Lanes,
+  propagationRoot: Fiber,
 ) {
   // Update the child lanes of all the ancestors, including the alternates.
   let node = parent;
@@ -158,11 +174,25 @@ export function scheduleWorkOnParentPath(
     ) {
       alternate.childLanes = mergeLanes(alternate.childLanes, renderLanes);
     } else {
-      // Neither alternate was updated, which means the rest of the
+      // Neither alternate was updated.
+      // Normally, this would mean that the rest of the
       // ancestor path already has sufficient priority.
+      // However, this is not necessarily true inside offscreen
+      // or fallback trees because childLanes may be inconsistent
+      // with the surroundings. This is why we continue the loop.
+    }
+    if (node === propagationRoot) {
       break;
     }
     node = node.return;
+  }
+  if (__DEV__) {
+    if (node !== propagationRoot) {
+      console.error(
+        'Expected to find the propagation root when scheduling context work. ' +
+          'This error is likely caused by a bug in React. Please file an issue.',
+      );
+    }
   }
 }
 
@@ -192,7 +222,7 @@ function propagateContextChange_eager<T>(
   context: ReactContext<T>,
   renderLanes: Lanes,
 ): void {
-  // Only used by eager implemenation
+  // Only used by eager implementation
   if (enableLazyContextPropagation) {
     return;
   }
@@ -247,7 +277,11 @@ function propagateContextChange_eager<T>(
           if (alternate !== null) {
             alternate.lanes = mergeLanes(alternate.lanes, renderLanes);
           }
-          scheduleWorkOnParentPath(fiber.return, renderLanes);
+          scheduleContextWorkOnParentPath(
+            fiber.return,
+            renderLanes,
+            workInProgress,
+          );
 
           // Mark the updated lanes on the list, too.
           list.lanes = mergeLanes(list.lanes, renderLanes);
@@ -269,10 +303,13 @@ function propagateContextChange_eager<T>(
       // if it will have any context consumers in it. The best we can do is
       // mark it as having updates.
       const parentSuspense = fiber.return;
-      invariant(
-        parentSuspense !== null,
-        'We just came from a parent so we must have had a parent. This is a bug in React.',
-      );
+
+      if (parentSuspense === null) {
+        throw new Error(
+          'We just came from a parent so we must have had a parent. This is a bug in React.',
+        );
+      }
+
       parentSuspense.lanes = mergeLanes(parentSuspense.lanes, renderLanes);
       const alternate = parentSuspense.alternate;
       if (alternate !== null) {
@@ -282,7 +319,11 @@ function propagateContextChange_eager<T>(
       // because we want to schedule this fiber as having work
       // on its children. We'll use the childLanes on
       // this fiber to indicate that a context has changed.
-      scheduleWorkOnParentPath(parentSuspense, renderLanes);
+      scheduleContextWorkOnParentPath(
+        parentSuspense,
+        renderLanes,
+        workInProgress,
+      );
       nextFiber = fiber.sibling;
     } else {
       // Traverse down.
@@ -322,7 +363,7 @@ function propagateContextChanges<T>(
   renderLanes: Lanes,
   forcePropagateEntireTree: boolean,
 ): void {
-  // Only used by lazy implemenation
+  // Only used by lazy implementation
   if (!enableLazyContextPropagation) {
     return;
   }
@@ -351,7 +392,7 @@ function propagateContextChanges<T>(
           if (dependency.context === context) {
             // Match! Schedule an update on this fiber.
 
-            // In the lazy implemenation, don't mark a dirty flag on the
+            // In the lazy implementation, don't mark a dirty flag on the
             // dependency itself. Not all changes are propagated, so we can't
             // rely on the propagation function alone to determine whether
             // something has changed; the consumer will check. In the future, we
@@ -363,7 +404,11 @@ function propagateContextChanges<T>(
             if (alternate !== null) {
               alternate.lanes = mergeLanes(alternate.lanes, renderLanes);
             }
-            scheduleWorkOnParentPath(consumer.return, renderLanes);
+            scheduleContextWorkOnParentPath(
+              consumer.return,
+              renderLanes,
+              workInProgress,
+            );
 
             if (!forcePropagateEntireTree) {
               // During lazy propagation, when we find a match, we can defer
@@ -388,10 +433,13 @@ function propagateContextChanges<T>(
       // if it will have any context consumers in it. The best we can do is
       // mark it as having updates.
       const parentSuspense = fiber.return;
-      invariant(
-        parentSuspense !== null,
-        'We just came from a parent so we must have had a parent. This is a bug in React.',
-      );
+
+      if (parentSuspense === null) {
+        throw new Error(
+          'We just came from a parent so we must have had a parent. This is a bug in React.',
+        );
+      }
+
       parentSuspense.lanes = mergeLanes(parentSuspense.lanes, renderLanes);
       const alternate = parentSuspense.alternate;
       if (alternate !== null) {
@@ -401,7 +449,11 @@ function propagateContextChanges<T>(
       // because we want to schedule this fiber as having work
       // on its children. We'll use the childLanes on
       // this fiber to indicate that a context has changed.
-      scheduleWorkOnParentPath(parentSuspense, renderLanes);
+      scheduleContextWorkOnParentPath(
+        parentSuspense,
+        renderLanes,
+        workInProgress,
+      );
       nextFiber = null;
     } else {
       // Traverse down.
@@ -493,10 +545,11 @@ function propagateParentContextChanges(
 
     if (parent.tag === ContextProvider) {
       const currentParent = parent.alternate;
-      invariant(
-        currentParent !== null,
-        'Should have a current fiber. This is a bug in React.',
-      );
+
+      if (currentParent === null) {
+        throw new Error('Should have a current fiber. This is a bug in React.');
+      }
+
       const oldProps = currentParent.memoizedProps;
       if (oldProps !== null) {
         const providerType: ReactProviderType<any> = parent.type;
@@ -631,13 +684,14 @@ export function readContext<T>(context: ReactContext<T>): T {
     };
 
     if (lastContextDependency === null) {
-      invariant(
-        currentlyRenderingFiber !== null,
-        'Context can only be read while React is rendering. ' +
-          'In classes, you can read it in the render method or getDerivedStateFromProps. ' +
-          'In function components, you can read it directly in the function body, but not ' +
-          'inside Hooks like useReducer() or useMemo().',
-      );
+      if (currentlyRenderingFiber === null) {
+        throw new Error(
+          'Context can only be read while React is rendering. ' +
+            'In classes, you can read it in the render method or getDerivedStateFromProps. ' +
+            'In function components, you can read it directly in the function body, but not ' +
+            'inside Hooks like useReducer() or useMemo().',
+        );
+      }
 
       // This is the first dependency for this component. Create a new list.
       lastContextDependency = contextItem;

@@ -27,7 +27,7 @@ const ensureLocalBuild = async () => {
     __dirname,
     '..',
     '..',
-    'build2',
+    'build',
     'oss-experimental',
   );
 
@@ -93,12 +93,6 @@ const build = async (tempPath, manifestPath) => {
     STATIC_FILES.map(file => copy(join(__dirname, file), join(zipPath, file))),
   );
 
-  // The "source-map" library requires this chunk of WASM to be bundled at runtime.
-  await copy(
-    join(__dirname, 'node_modules', 'source-map', 'lib', 'mappings.wasm'),
-    join(zipPath, 'mappings.wasm'),
-  );
-
   const commit = getGitCommit();
   const dateString = new Date().toLocaleDateString();
   const manifest = JSON.parse(readFileSync(copiedManifestPath).toString());
@@ -107,6 +101,17 @@ const build = async (tempPath, manifestPath) => {
     manifest.version_name = versionDateString;
   }
   manifest.description += `\n\nCreated from revision ${commit} on ${dateString}.`;
+
+  if (process.env.NODE_ENV === 'development') {
+    // When building the local development version of the
+    // extension we want to be able to have a stable extension ID
+    // for the local build (in order to be able to reliably detect
+    // duplicate installations of DevTools).
+    // By specifying a key in the built manifest.json file,
+    // we can make it so the generated extension ID is stable.
+    // For more details see the docs here: https://developer.chrome.com/docs/extensions/mv2/manifest/key/
+    manifest.key = 'reactdevtoolslocalbuilduniquekey';
+  }
 
   writeFileSync(copiedManifestPath, JSON.stringify(manifest, null, 2));
 

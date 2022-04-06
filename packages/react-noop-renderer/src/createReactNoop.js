@@ -14,7 +14,10 @@
  * environment.
  */
 
-import type {Fiber} from 'react-reconciler/src/ReactInternalTypes';
+import type {
+  Fiber,
+  TransitionTracingCallbacks,
+} from 'react-reconciler/src/ReactInternalTypes';
 import type {UpdateQueue} from 'react-reconciler/src/ReactUpdateQueue';
 import type {ReactNodeList, OffscreenMode} from 'shared/ReactTypes';
 import type {RootTag} from 'react-reconciler/src/ReactRootTags';
@@ -22,6 +25,7 @@ import type {RootTag} from 'react-reconciler/src/ReactRootTags';
 import * as Scheduler from 'scheduler/unstable_mock';
 import {REACT_FRAGMENT_TYPE, REACT_ELEMENT_TYPE} from 'shared/ReactSymbols';
 import isArray from 'shared/isArray';
+import {checkPropStringCoercion} from 'shared/CheckStringCoercion';
 import {
   DefaultEventPriority,
   IdleEventPriority,
@@ -63,6 +67,10 @@ type TextInstance = {|
   context: HostContext,
 |};
 type HostContext = Object;
+type CreateRootOptions = {
+  transitionCallbacks?: TransitionTracingCallbacks,
+  ...
+};
 
 const NO_CONTEXT = {};
 const UPPERCASE_CONTEXT = {};
@@ -215,6 +223,9 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
     keepChildren: boolean,
     recyclableInstance: null | Instance,
   ): Instance {
+    if (__DEV__) {
+      checkPropStringCoercion(newProps.children, 'children');
+    }
     const clone = {
       id: instance.id,
       type: type,
@@ -293,13 +304,21 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
       if (type === 'errorInCompletePhase') {
         throw new Error('Error in host config.');
       }
+      if (__DEV__) {
+        // The `if` statement here prevents auto-disabling of the safe coercion
+        // ESLint rule, so we must manually disable it below.
+        if (shouldSetTextContent(type, props)) {
+          checkPropStringCoercion(props.children, 'children');
+        }
+      }
       const inst = {
         id: instanceCounter++,
         type: type,
         children: [],
         parent: -1,
         text: shouldSetTextContent(type, props)
-          ? computeText((props.children: any) + '', hostContext)
+          ? // eslint-disable-next-line react-internal/safe-string-coercion
+            computeText((props.children: any) + '', hostContext)
           : null,
         prop: props.prop,
         hidden: !!props.hidden,
@@ -454,6 +473,10 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
     },
 
     detachDeletedInstance() {},
+
+    logRecoverableError() {
+      // no-op
+    },
   };
 
   const hostConfig = useMutation
@@ -481,6 +504,9 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
           instance.prop = newProps.prop;
           instance.hidden = !!newProps.hidden;
           if (shouldSetTextContent(type, newProps)) {
+            if (__DEV__) {
+              checkPropStringCoercion(newProps.children, 'children');
+            }
             instance.text = computeText(
               (newProps.children: any) + '',
               instance.context,
@@ -906,6 +932,25 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
     return children;
   }
 
+  function flushSync<R>(fn: () => R): R {
+    if (__DEV__) {
+      if (NoopRenderer.isAlreadyRendering()) {
+        console.error(
+          'flushSync was called from inside a lifecycle method. React cannot ' +
+            'flush when React is already rendering. Consider moving this call to ' +
+            'a scheduler task or micro task.',
+        );
+      }
+    }
+    return NoopRenderer.flushSync(fn);
+  }
+
+  function onRecoverableError(error) {
+    // TODO: Turn this on once tests are fixed
+    // eslint-disable-next-line react-internal/no-production-logging, react-internal/warning-args
+    // console.error(error);
+  }
+
   let idCounter = 0;
 
   const ReactNoop = {
@@ -926,14 +971,22 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
       if (!root) {
         const container = {rootID: rootID, pendingChildren: [], children: []};
         rootContainers.set(rootID, container);
-        root = NoopRenderer.createContainer(container, tag, false, null, null);
+        root = NoopRenderer.createContainer(
+          container,
+          tag,
+          null,
+          null,
+          false,
+          '',
+          onRecoverableError,
+        );
         roots.set(rootID, root);
       }
       return root.current.stateNode.containerInfo;
     },
 
     // TODO: Replace ReactNoop.render with createRoot + root.render
-    createRoot() {
+    createRoot(options?: CreateRootOptions) {
       const container = {
         rootID: '' + idCounter++,
         pendingChildren: [],
@@ -942,9 +995,14 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
       const fiberRoot = NoopRenderer.createContainer(
         container,
         ConcurrentRoot,
+        null,
+        null,
         false,
-        null,
-        null,
+        '',
+        onRecoverableError,
+        options && options.transitionCallbacks
+          ? options.transitionCallbacks
+          : null,
       );
       return {
         _Scheduler: Scheduler,
@@ -969,9 +1027,11 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
       const fiberRoot = NoopRenderer.createContainer(
         container,
         LegacyRoot,
+        null,
+        null,
         false,
-        null,
-        null,
+        '',
+        onRecoverableError,
       );
       return {
         _Scheduler: Scheduler,
@@ -1121,7 +1181,7 @@ function createReactNoop(reconciler: Function, useMutation: boolean) {
       }
     },
 
-    flushSync: NoopRenderer.flushSync,
+    flushSync,
     flushPassiveEffects: NoopRenderer.flushPassiveEffects,
 
     // Logs the current state of the tree.

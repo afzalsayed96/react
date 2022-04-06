@@ -18,13 +18,19 @@ const {
 // Runs the build script for both stable and experimental release channels,
 // by configuring an environment variable.
 
-const sha = (
-  spawnSync('git', ['show', '-s', '--format=%h']).stdout + ''
+const sha = String(
+  spawnSync('git', ['show', '-s', '--no-show-signature', '--format=%h']).stdout
 ).trim();
 
-let dateString = (
-  spawnSync('git', ['show', '-s', '--format=%cd', '--date=format:%Y%m%d', sha])
-    .stdout + ''
+let dateString = String(
+  spawnSync('git', [
+    'show',
+    '-s',
+    '--no-show-signature',
+    '--format=%cd',
+    '--date=format:%Y%m%d',
+    sha,
+  ]).stdout
 ).trim();
 
 // On CI environment, this string is wrapped with quotes '...'s
@@ -56,10 +62,6 @@ if (process.env.CIRCLE_NODE_TOTAL) {
     buildForChannel('experimental', nodeTotal, nodeIndex);
     processExperimental('./build');
   }
-
-  // TODO: Currently storing artifacts as `./build2` so that it doesn't conflict
-  // with old build job. Remove once we migrate rest of build/test pipeline.
-  fs.renameSync('./build', './build2');
 } else {
   // Running locally, no concurrency. Move each channel's build artifacts into
   // a temporary directory so that they don't conflict.
@@ -85,9 +87,7 @@ if (process.env.CIRCLE_NODE_TOTAL) {
   mergeDirsSync(experimentalDir + '/', stableDir + '/');
 
   // Now restore the combined directory back to its original name
-  // TODO: Currently storing artifacts as `./build2` so that it doesn't conflict
-  // with old build job. Remove once we migrate rest of build/test pipeline.
-  crossDeviceRenameSync(stableDir, './build2');
+  crossDeviceRenameSync(stableDir, './build');
 }
 
 function buildForChannel(channel, nodeTotal, nodeIndex) {
@@ -104,6 +104,14 @@ function buildForChannel(channel, nodeTotal, nodeIndex) {
 
 function processStable(buildDir) {
   if (fs.existsSync(buildDir + '/node_modules')) {
+    // Identical to `oss-stable` but with real, semver versions. This is what
+    // will get published to @latest.
+    spawnSync('cp', [
+      '-r',
+      buildDir + '/node_modules',
+      buildDir + '/oss-stable-semver',
+    ]);
+
     const defaultVersionIfNotFound = '0.0.0' + '-' + sha + '-' + dateString;
     const versionsMap = new Map();
     for (const moduleName in stablePackages) {
@@ -122,13 +130,7 @@ function processStable(buildDir) {
     );
     fs.renameSync(buildDir + '/node_modules', buildDir + '/oss-stable');
 
-    // Identical to `oss-stable` but with real, semver versions. This is what
-    // will get published to @latest.
-    spawnSync('cp', [
-      '-r',
-      buildDir + '/oss-stable',
-      buildDir + '/oss-stable-semver',
-    ]);
+    // Now do the semver ones
     const semverVersionsMap = new Map();
     for (const moduleName in stablePackages) {
       const version = stablePackages[moduleName];
@@ -249,12 +251,19 @@ function updatePackageVersions(
         }
       }
       if (packageInfo.peerDependencies) {
-        for (const dep of Object.keys(packageInfo.peerDependencies)) {
-          const depVersion = versionsMap.get(dep);
-          if (depVersion !== undefined) {
-            packageInfo.peerDependencies[dep] = pinToExactVersion
-              ? depVersion
-              : '^' + depVersion;
+        if (!pinToExactVersion && moduleName === 'use-sync-external-store') {
+          // use-sync-external-store supports older versions of React, too, so
+          // we don't override to the latest version. We should figure out some
+          // better way to handle this.
+          // TODO: Remove this special case.
+        } else {
+          for (const dep of Object.keys(packageInfo.peerDependencies)) {
+            const depVersion = versionsMap.get(dep);
+            if (depVersion !== undefined) {
+              packageInfo.peerDependencies[dep] = pinToExactVersion
+                ? depVersion
+                : '^' + depVersion;
+            }
           }
         }
       }

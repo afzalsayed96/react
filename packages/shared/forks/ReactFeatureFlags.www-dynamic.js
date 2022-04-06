@@ -18,7 +18,16 @@ export const disableInputAttributeSyncing = __VARIANT__;
 export const enableFilterEmptyStringAttributesDOM = __VARIANT__;
 export const enableLegacyFBSupport = __VARIANT__;
 export const skipUnmountedBoundaries = __VARIANT__;
-export const enableSuspenseLayoutEffectSemantics = __VARIANT__;
+export const enableUseRefAccessWarning = __VARIANT__;
+export const deletedTreeCleanUpLevel = __VARIANT__ ? 3 : 1;
+export const enableProfilerNestedUpdateScheduledHook = __VARIANT__;
+export const disableSchedulerTimeoutInWorkLoop = __VARIANT__;
+export const enableLazyContextPropagation = __VARIANT__;
+export const enableSyncDefaultUpdates = __VARIANT__;
+export const consoleManagedByDevToolsDuringStrictMode = __VARIANT__;
+export const enableClientRenderFallbackOnHydrationMismatch = __VARIANT__;
+export const enableClientRenderFallbackOnTextMismatch = __VARIANT__;
+export const enableTransitionTracing = __VARIANT__;
 
 // Enable this flag to help with concurrent mode debugging.
 // It logs information to the console about React scheduling, rendering, and commit phases.
@@ -48,15 +57,9 @@ export const replayFailedUnitOfWorkWithInvokeGuardedCallback = __DEV__;
 export const enableTrustedTypesIntegration = false;
 export const disableSchedulerTimeoutBasedOnReactExpirationTime = false;
 export const disableNativeComponentFrames = false;
-
 export const createRootStrictEffectsByDefault = false;
 export const enableStrictEffects = false;
-export const enableUseRefAccessWarning = __VARIANT__;
-export const deletedTreeCleanUpLevel = __VARIANT__ ? 3 : 1;
-
-export const enableProfilerNestedUpdateScheduledHook = __VARIANT__;
-export const disableSchedulerTimeoutInWorkLoop = __VARIANT__;
-export const enableLazyContextPropagation = __VARIANT__;
-export const enableSyncDefaultUpdates = __VARIANT__;
 export const allowConcurrentByDefault = true;
 export const enablePersistentOffscreenHostContainer = false;
+// You probably *don't* want to add more hardcoded ones.
+// Instead, try to add them above with the __VARIANT__ value.

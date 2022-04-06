@@ -110,10 +110,9 @@ import {
   isInterleavedUpdate,
 } from './ReactFiberWorkLoop.old';
 import {pushInterleavedQueue} from './ReactFiberInterleavedUpdates.old';
+import {setIsStrictModeForDevtools} from './ReactFiberDevToolsHook.old';
 
-import invariant from 'shared/invariant';
-
-import {disableLogs, reenableLogs} from 'shared/ConsolePatchingDev';
+import assign from 'shared/assign';
 
 export type Update<State> = {|
   // TODO: Temporary field. Will remove this by storing a map of
@@ -230,7 +229,7 @@ export function enqueueUpdate<State>(
       // This is the first update. Create a circular list.
       update.next = update;
       // At the end of the current render, this queue's interleaved updates will
-      // be transfered to the pending queue.
+      // be transferred to the pending queue.
       pushInterleavedQueue(sharedQueue);
     } else {
       update.next = interleaved.next;
@@ -394,11 +393,11 @@ function getStateFromUpdate<State>(
             debugRenderPhaseSideEffectsForStrictMode &&
             workInProgress.mode & StrictLegacyMode
           ) {
-            disableLogs();
+            setIsStrictModeForDevtools(true);
             try {
               payload.call(instance, prevState, nextProps);
             } finally {
-              reenableLogs();
+              setIsStrictModeForDevtools(false);
             }
           }
           exitDisallowedContextReadInDEV();
@@ -427,11 +426,11 @@ function getStateFromUpdate<State>(
             debugRenderPhaseSideEffectsForStrictMode &&
             workInProgress.mode & StrictLegacyMode
           ) {
-            disableLogs();
+            setIsStrictModeForDevtools(true);
             try {
               payload.call(instance, prevState, nextProps);
             } finally {
-              reenableLogs();
+              setIsStrictModeForDevtools(false);
             }
           }
           exitDisallowedContextReadInDEV();
@@ -445,7 +444,7 @@ function getStateFromUpdate<State>(
         return prevState;
       }
       // Merge the partial state and the previous state.
-      return Object.assign({}, prevState, partialState);
+      return assign({}, prevState, partialState);
     }
     case ForceUpdate: {
       hasForceUpdate = true;
@@ -657,12 +656,13 @@ export function processUpdateQueue<State>(
 }
 
 function callCallback(callback, context) {
-  invariant(
-    typeof callback === 'function',
-    'Invalid argument passed as callback. Expected a function. Instead ' +
-      'received: %s',
-    callback,
-  );
+  if (typeof callback !== 'function') {
+    throw new Error(
+      'Invalid argument passed as callback. Expected a function. Instead ' +
+        `received: ${callback}`,
+    );
+  }
+
   callback.call(context);
 }
 

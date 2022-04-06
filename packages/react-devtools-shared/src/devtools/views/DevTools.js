@@ -13,18 +13,24 @@ import '@reach/menu-button/styles.css';
 import '@reach/tooltip/styles.css';
 
 import * as React from 'react';
-import {useEffect, useLayoutEffect, useMemo, useRef} from 'react';
+import {useCallback, useEffect, useLayoutEffect, useMemo, useRef} from 'react';
 import Store from '../store';
-import {BridgeContext, ContextMenuContext, StoreContext} from './context';
+import {
+  BridgeContext,
+  ContextMenuContext,
+  StoreContext,
+  OptionsContext,
+} from './context';
 import Components from './Components/Components';
 import Profiler from './Profiler/Profiler';
 import TabBar from './TabBar';
 import {SettingsContextController} from './Settings/SettingsContext';
 import {TreeContextController} from './Components/TreeContext';
 import ViewElementSourceContext from './Components/ViewElementSourceContext';
-import HookNamesContext from './Components/HookNamesContext';
+import FetchFileWithCachingContext from './Components/FetchFileWithCachingContext';
+import HookNamesModuleLoaderContext from 'react-devtools-shared/src/devtools/views/Components/HookNamesModuleLoaderContext';
 import {ProfilerContextController} from './Profiler/ProfilerContext';
-import {SchedulingProfilerContextController} from 'react-devtools-scheduling-profiler/src/SchedulingProfilerContext';
+import {TimelineContextController} from 'react-devtools-timeline/src/TimelineContext';
 import {ModalDialogContextController} from './ModalDialog';
 import ReactLogo from './ReactLogo';
 import UnsupportedBridgeProtocolDialog from './UnsupportedBridgeProtocolDialog';
@@ -32,16 +38,17 @@ import UnsupportedVersionDialog from './UnsupportedVersionDialog';
 import WarnIfLegacyBackendDetected from './WarnIfLegacyBackendDetected';
 import {useLocalStorage} from './hooks';
 import ThemeProvider from './ThemeProvider';
+import {LOCAL_STORAGE_DEFAULT_TAB_KEY} from '../../constants';
 
 import styles from './DevTools.css';
 
 import './root.css';
 
-import type {HooksTree} from 'react-debug-tools/src/ReactDebugHooks';
 import type {InspectedElement} from 'react-devtools-shared/src/devtools/views/Components/types';
+import type {FetchFileWithCaching} from './Components/FetchFileWithCachingContext';
+import type {HookNamesModuleLoaderFunction} from 'react-devtools-shared/src/devtools/views/Components/HookNamesModuleLoaderContext';
 import type {FrontendBridge} from 'react-devtools-shared/src/bridge';
-import type {HookNames} from 'react-devtools-shared/src/types';
-import type {Thenable} from '../cache';
+import {logEvent} from '../../Logger';
 
 export type BrowserTheme = 'dark' | 'light';
 export type TabID = 'components' | 'profiler';
@@ -50,10 +57,6 @@ export type ViewElementSource = (
   id: number,
   inspectedElement: InspectedElement,
 ) => void;
-export type LoadHookNamesFunction = (
-  hooksTree: HooksTree,
-) => Thenable<HookNames>;
-export type PurgeCachedHookNamesMetadata = () => void;
 export type ViewAttributeSource = (
   id: number,
   path: Array<string | number>,
@@ -74,6 +77,12 @@ export type Props = {|
   warnIfUnsupportedVersionDetected?: boolean,
   viewAttributeSourceFunction?: ?ViewAttributeSource,
   viewElementSourceFunction?: ?ViewElementSource,
+  readOnly?: boolean,
+  hideSettings?: boolean,
+  hideToggleErrorAction?: boolean,
+  hideToggleSuspenseAction?: boolean,
+  hideLogAction?: boolean,
+  hideViewSourceAction?: boolean,
 
   // This property is used only by the web extension target.
   // The built-in tab UI is hidden in that case, in favor of the browser's own panel tabs.
@@ -90,8 +99,9 @@ export type Props = {|
   // Loads and parses source maps for function components
   // and extracts hook "names" based on the variables the hook return values get assigned to.
   // Not every DevTools build can load source maps, so this property is optional.
-  loadHookNames?: ?LoadHookNamesFunction,
-  purgeCachedHookNamesMetadata?: ?PurgeCachedHookNamesMetadata,
+  fetchFileWithCaching?: ?FetchFileWithCaching,
+  // TODO (Webpack 5) Hopefully we can remove this prop after the Webpack 5 migration.
+  hookNamesModuleLoaderFunction?: ?HookNamesModuleLoaderFunction,
 |};
 
 const componentsTab = {
@@ -116,19 +126,25 @@ export default function DevTools({
   componentsPortalContainer,
   defaultTab = 'components',
   enabledInspectedElementContextMenu = false,
-  loadHookNames,
+  fetchFileWithCaching,
+  hookNamesModuleLoaderFunction,
   overrideTab,
   profilerPortalContainer,
-  purgeCachedHookNamesMetadata,
   showTabBar = false,
   store,
   warnIfLegacyBackendDetected = false,
   warnIfUnsupportedVersionDetected = false,
   viewAttributeSourceFunction,
   viewElementSourceFunction,
+  readOnly,
+  hideSettings,
+  hideToggleErrorAction,
+  hideToggleSuspenseAction,
+  hideLogAction,
+  hideViewSourceAction,
 }: Props) {
   const [currentTab, setTab] = useLocalStorage<TabID>(
-    'React::DevTools::defaultTab',
+    LOCAL_STORAGE_DEFAULT_TAB_KEY,
     defaultTab,
   );
 
@@ -137,6 +153,43 @@ export default function DevTools({
   if (overrideTab != null) {
     tab = overrideTab;
   }
+
+  const selectTab = useCallback(
+    (tabId: TabID) => {
+      // We show the TabBar when DevTools is NOT rendered as a browser extension.
+      // In this case, we want to capture when people select tabs with the TabBar.
+      // When DevTools is rendered as an extension, we capture this event when
+      // the browser devtools panel changes.
+      if (showTabBar === true) {
+        if (tabId === 'components') {
+          logEvent({event_name: 'selected-components-tab'});
+        } else {
+          logEvent({event_name: 'selected-profiler-tab'});
+        }
+      }
+      setTab(tabId);
+    },
+    [setTab, showTabBar],
+  );
+
+  const options = useMemo(
+    () => ({
+      readOnly: readOnly || false,
+      hideSettings: hideSettings || false,
+      hideToggleErrorAction: hideToggleErrorAction || false,
+      hideToggleSuspenseAction: hideToggleSuspenseAction || false,
+      hideLogAction: hideLogAction || false,
+      hideViewSourceAction: hideViewSourceAction || false,
+    }),
+    [
+      readOnly,
+      hideSettings,
+      hideToggleErrorAction,
+      hideToggleSuspenseAction,
+      hideLogAction,
+      hideViewSourceAction,
+    ],
+  );
 
   const viewElementSource = useMemo(
     () => ({
@@ -152,14 +205,6 @@ export default function DevTools({
       viewAttributeSourceFunction: viewAttributeSourceFunction || null,
     }),
     [enabledInspectedElementContextMenu, viewAttributeSourceFunction],
-  );
-
-  const hookNamesContext = useMemo(
-    () => ({
-      loadHookNames: loadHookNames || null,
-      purgeCachedMetadata: purgeCachedHookNamesMetadata || null,
-    }),
-    [loadHookNames, purgeCachedHookNamesMetadata],
   );
 
   const devToolsRef = useRef<HTMLElement | null>(null);
@@ -179,12 +224,12 @@ export default function DevTools({
       if (event.ctrlKey || event.metaKey) {
         switch (event.key) {
           case '1':
-            setTab(tabs[0].id);
+            selectTab(tabs[0].id);
             event.preventDefault();
             event.stopPropagation();
             break;
           case '2':
-            setTab(tabs[1].id);
+            selectTab(tabs[1].id);
             event.preventDefault();
             event.stopPropagation();
             break;
@@ -207,68 +252,78 @@ export default function DevTools({
       }
     };
   }, [bridge]);
+
+  useEffect(() => {
+    logEvent({event_name: 'loaded-dev-tools'});
+  }, []);
   return (
     <BridgeContext.Provider value={bridge}>
       <StoreContext.Provider value={store}>
-        <ContextMenuContext.Provider value={contextMenu}>
-          <ModalDialogContextController>
-            <SettingsContextController
-              browserTheme={browserTheme}
-              componentsPortalContainer={componentsPortalContainer}
-              profilerPortalContainer={profilerPortalContainer}>
-              <ViewElementSourceContext.Provider value={viewElementSource}>
-                <HookNamesContext.Provider value={hookNamesContext}>
-                  <TreeContextController>
-                    <ProfilerContextController>
-                      <SchedulingProfilerContextController>
-                        <ThemeProvider>
-                          <div
-                            className={styles.DevTools}
-                            ref={devToolsRef}
-                            data-react-devtools-portal-root={true}>
-                            {showTabBar && (
-                              <div className={styles.TabBar}>
-                                <ReactLogo />
-                                <span className={styles.DevToolsVersion}>
-                                  {process.env.DEVTOOLS_VERSION}
-                                </span>
-                                <div className={styles.Spacer} />
-                                <TabBar
-                                  currentTab={tab}
-                                  id="DevTools"
-                                  selectTab={setTab}
-                                  tabs={tabs}
-                                  type="navigation"
-                                />
+        <OptionsContext.Provider value={options}>
+          <ContextMenuContext.Provider value={contextMenu}>
+            <ModalDialogContextController>
+              <SettingsContextController
+                browserTheme={browserTheme}
+                componentsPortalContainer={componentsPortalContainer}
+                profilerPortalContainer={profilerPortalContainer}>
+                <ViewElementSourceContext.Provider value={viewElementSource}>
+                  <HookNamesModuleLoaderContext.Provider
+                    value={hookNamesModuleLoaderFunction || null}>
+                    <FetchFileWithCachingContext.Provider
+                      value={fetchFileWithCaching || null}>
+                      <TreeContextController>
+                        <ProfilerContextController>
+                          <TimelineContextController>
+                            <ThemeProvider>
+                              <div
+                                className={styles.DevTools}
+                                ref={devToolsRef}
+                                data-react-devtools-portal-root={true}>
+                                {showTabBar && (
+                                  <div className={styles.TabBar}>
+                                    <ReactLogo />
+                                    <span className={styles.DevToolsVersion}>
+                                      {process.env.DEVTOOLS_VERSION}
+                                    </span>
+                                    <div className={styles.Spacer} />
+                                    <TabBar
+                                      currentTab={tab}
+                                      id="DevTools"
+                                      selectTab={selectTab}
+                                      tabs={tabs}
+                                      type="navigation"
+                                    />
+                                  </div>
+                                )}
+                                <div
+                                  className={styles.TabContent}
+                                  hidden={tab !== 'components'}>
+                                  <Components
+                                    portalContainer={componentsPortalContainer}
+                                  />
+                                </div>
+                                <div
+                                  className={styles.TabContent}
+                                  hidden={tab !== 'profiler'}>
+                                  <Profiler
+                                    portalContainer={profilerPortalContainer}
+                                  />
+                                </div>
                               </div>
-                            )}
-                            <div
-                              className={styles.TabContent}
-                              hidden={tab !== 'components'}>
-                              <Components
-                                portalContainer={componentsPortalContainer}
-                              />
-                            </div>
-                            <div
-                              className={styles.TabContent}
-                              hidden={tab !== 'profiler'}>
-                              <Profiler
-                                portalContainer={profilerPortalContainer}
-                              />
-                            </div>
-                          </div>
-                        </ThemeProvider>
-                      </SchedulingProfilerContextController>
-                    </ProfilerContextController>
-                  </TreeContextController>
-                </HookNamesContext.Provider>
-              </ViewElementSourceContext.Provider>
-            </SettingsContextController>
-            <UnsupportedBridgeProtocolDialog />
-            {warnIfLegacyBackendDetected && <WarnIfLegacyBackendDetected />}
-            {warnIfUnsupportedVersionDetected && <UnsupportedVersionDialog />}
-          </ModalDialogContextController>
-        </ContextMenuContext.Provider>
+                            </ThemeProvider>
+                          </TimelineContextController>
+                        </ProfilerContextController>
+                      </TreeContextController>
+                    </FetchFileWithCachingContext.Provider>
+                  </HookNamesModuleLoaderContext.Provider>
+                </ViewElementSourceContext.Provider>
+              </SettingsContextController>
+              <UnsupportedBridgeProtocolDialog />
+              {warnIfLegacyBackendDetected && <WarnIfLegacyBackendDetected />}
+              {warnIfUnsupportedVersionDetected && <UnsupportedVersionDialog />}
+            </ModalDialogContextController>
+          </ContextMenuContext.Provider>
+        </OptionsContext.Provider>
       </StoreContext.Provider>
     </BridgeContext.Provider>
   );
