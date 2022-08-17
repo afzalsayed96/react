@@ -37,6 +37,7 @@ import {
   flushControlled,
   injectIntoDevTools,
   attemptSynchronousHydration,
+  attemptDiscreteHydration,
   attemptContinuousHydration,
   attemptHydrationAtCurrentPriority,
 } from 'react-reconciler/src/ReactFiberReconciler';
@@ -58,6 +59,7 @@ import {
 import {restoreControlledState} from './ReactDOMComponent';
 import {
   setAttemptSynchronousHydration,
+  setAttemptDiscreteHydration,
   setAttemptContinuousHydration,
   setAttemptHydrationAtCurrentPriority,
   setGetCurrentUpdatePriority,
@@ -71,6 +73,7 @@ import {
 } from '../events/ReactDOMControlledComponent';
 
 setAttemptSynchronousHydration(attemptSynchronousHydration);
+setAttemptDiscreteHydration(attemptDiscreteHydration);
 setAttemptContinuousHydration(attemptContinuousHydration);
 setAttemptHydrationAtCurrentPriority(attemptHydrationAtCurrentPriority);
 setGetCurrentUpdatePriority(getCurrentUpdatePriority);
@@ -104,7 +107,7 @@ setBatchingImplementation(
 
 function createPortal(
   children: ReactNodeList,
-  container: Container,
+  container: Element | DocumentFragment,
   key: ?string = null,
 ): React$Portal {
   if (!isValidContainer(container)) {
@@ -145,7 +148,7 @@ const Internals = {
 };
 
 function createRoot(
-  container: Element | DocumentFragment,
+  container: Element | Document | DocumentFragment,
   options?: CreateRootOptions,
 ): RootType {
   if (__DEV__) {

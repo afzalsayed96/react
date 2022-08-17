@@ -54,7 +54,6 @@ export const createTextInstance = $$$hostConfig.createTextInstance;
 export const scheduleTimeout = $$$hostConfig.scheduleTimeout;
 export const cancelTimeout = $$$hostConfig.cancelTimeout;
 export const noTimeout = $$$hostConfig.noTimeout;
-export const now = $$$hostConfig.now;
 export const isPrimaryRenderer = $$$hostConfig.isPrimaryRenderer;
 export const warnsIfNotActing = $$$hostConfig.warnsIfNotActing;
 export const supportsMutation = $$$hostConfig.supportsMutation;
@@ -121,10 +120,6 @@ export const appendChildToContainerChildSet =
 export const finalizeContainerChildren =
   $$$hostConfig.finalizeContainerChildren;
 export const replaceContainerChildren = $$$hostConfig.replaceContainerChildren;
-export const getOffscreenContainerType =
-  $$$hostConfig.getOffscreenContainerType;
-export const getOffscreenContainerProps =
-  $$$hostConfig.getOffscreenContainerProps;
 export const cloneHiddenInstance = $$$hostConfig.cloneHiddenInstance;
 export const cloneHiddenTextInstance = $$$hostConfig.cloneHiddenTextInstance;
 
@@ -140,6 +135,8 @@ export const isSuspenseInstancePending =
   $$$hostConfig.isSuspenseInstancePending;
 export const isSuspenseInstanceFallback =
   $$$hostConfig.isSuspenseInstanceFallback;
+export const getSuspenseInstanceFallbackErrorDetails =
+  $$$hostConfig.getSuspenseInstanceFallbackErrorDetails;
 export const registerSuspenseInstanceRetry =
   $$$hostConfig.registerSuspenseInstanceRetry;
 export const getNextHydratableSibling = $$$hostConfig.getNextHydratableSibling;
@@ -189,3 +186,6 @@ export const didNotFindHydratableTextInstance =
 export const didNotFindHydratableSuspenseInstance =
   $$$hostConfig.didNotFindHydratableSuspenseInstance;
 export const errorHydratingContainer = $$$hostConfig.errorHydratingContainer;
+export const isHydratableResource = $$$hostConfig.isHydratableResource;
+export const getMatchingResourceInstance =
+  $$$hostConfig.getMatchingResourceInstance;

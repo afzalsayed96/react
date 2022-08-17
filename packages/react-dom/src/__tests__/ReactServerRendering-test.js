@@ -14,8 +14,6 @@ let React;
 let ReactDOMServer;
 let PropTypes;
 let ReactCurrentDispatcher;
-const enableSuspenseServerRenderer = require('shared/ReactFeatureFlags')
-  .enableSuspenseServerRenderer;
 
 describe('ReactDOMServer', () => {
   beforeEach(() => {
@@ -564,6 +562,19 @@ describe('ReactDOMServer', () => {
         'Bad lazy',
       );
     });
+
+    it('aborts synchronously any suspended tasks and renders their fallbacks', () => {
+      const promise = new Promise(res => {});
+      function Suspender() {
+        throw promise;
+      }
+      const response = ReactDOMServer.renderToStaticMarkup(
+        <React.Suspense fallback={'fallback'}>
+          <Suspender />
+        </React.Suspense>,
+      );
+      expect(response).toEqual('fallback');
+    });
   });
 
   describe('renderToNodeStream', () => {
@@ -619,6 +630,41 @@ describe('ReactDOMServer', () => {
         });
         expect(response.read()).toBeNull();
       });
+    });
+
+    it('should refer users to new apis when using suspense', async () => {
+      let resolve = null;
+      const promise = new Promise(res => {
+        resolve = () => {
+          resolved = true;
+          res();
+        };
+      });
+      let resolved = false;
+      function Suspender() {
+        if (resolved) {
+          return 'resolved';
+        }
+        throw promise;
+      }
+
+      let response;
+      expect(() => {
+        response = ReactDOMServer.renderToNodeStream(
+          <div>
+            <React.Suspense fallback={'fallback'}>
+              <Suspender />
+            </React.Suspense>
+          </div>,
+        );
+      }).toErrorDev(
+        'renderToNodeStream is deprecated. Use renderToPipeableStream instead.',
+        {withoutStack: true},
+      );
+      await resolve();
+      expect(response.read().toString()).toEqual(
+        '<div><!--$-->resolved<!-- --><!--/$--></div>',
+      );
     });
   });
 
@@ -677,41 +723,6 @@ describe('ReactDOMServer', () => {
     const markup = ReactDOMServer.renderToStaticMarkup(<Baz />);
     expect(markup).toBe('<div></div>');
   });
-
-  if (!enableSuspenseServerRenderer) {
-    it('throws for unsupported types on the server', () => {
-      expect(() => {
-        ReactDOMServer.renderToString(<React.Suspense />);
-      }).toThrow('ReactDOMServer does not yet support Suspense.');
-
-      async function fakeImport(result) {
-        return {default: result};
-      }
-
-      expect(() => {
-        const LazyFoo = React.lazy(() =>
-          fakeImport(
-            new Promise(resolve =>
-              resolve(function Foo() {
-                return <div />;
-              }),
-            ),
-          ),
-        );
-        ReactDOMServer.renderToString(<LazyFoo />);
-      }).toThrow('ReactDOMServer does not yet support Suspense.');
-    });
-
-    it('throws when suspending on the server', () => {
-      function AsyncFoo() {
-        throw new Promise(() => {});
-      }
-
-      expect(() => {
-        ReactDOMServer.renderToString(<AsyncFoo />);
-      }).toThrow('ReactDOMServer does not yet support Suspense.');
-    });
-  }
 
   it('does not get confused by throwing null', () => {
     function Bad() {

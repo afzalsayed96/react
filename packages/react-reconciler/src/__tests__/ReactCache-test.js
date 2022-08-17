@@ -6,6 +6,7 @@ let getCacheForType;
 let Scheduler;
 let act;
 let Suspense;
+let Offscreen;
 let useCacheRefresh;
 let startTransition;
 let useState;
@@ -23,6 +24,7 @@ describe('ReactCache', () => {
     Scheduler = require('scheduler');
     act = require('jest-react').act;
     Suspense = React.Suspense;
+    Offscreen = React.unstable_Offscreen;
     getCacheSignal = React.unstable_getCacheSignal;
     getCacheForType = React.unstable_getCacheForType;
     useCacheRefresh = React.unstable_useCacheRefresh;
@@ -229,6 +231,53 @@ describe('ReactCache', () => {
     });
     expect(Scheduler).toHaveYielded(['A']);
     expect(root).toMatchRenderedOutput('A');
+
+    await act(async () => {
+      root.render('Bye');
+    });
+    // no cleanup: cache is still retained at the root
+    expect(Scheduler).toHaveYielded([]);
+    expect(root).toMatchRenderedOutput('Bye');
+  });
+
+  // @gate experimental || www
+  test('multiple new Cache boundaries in the same mount share the same, fresh root cache', async () => {
+    function App() {
+      return (
+        <>
+          <Cache>
+            <Suspense fallback={<Text text="Loading..." />}>
+              <AsyncText text="A" />
+            </Suspense>
+          </Cache>
+          <Cache>
+            <Suspense fallback={<Text text="Loading..." />}>
+              <AsyncText text="A" />
+            </Suspense>
+          </Cache>
+        </>
+      );
+    }
+
+    const root = ReactNoop.createRoot();
+    await act(async () => {
+      root.render(<App showMore={false} />);
+    });
+
+    // Even though there are two new <Cache /> trees, they should share the same
+    // data cache. So there should be only a single cache miss for A.
+    expect(Scheduler).toHaveYielded([
+      'Cache miss! [A]',
+      'Loading...',
+      'Loading...',
+    ]);
+    expect(root).toMatchRenderedOutput('Loading...Loading...');
+
+    await act(async () => {
+      resolveMostRecentTextCache('A');
+    });
+    expect(Scheduler).toHaveYielded(['A', 'A']);
+    expect(root).toMatchRenderedOutput('AA');
 
     await act(async () => {
       root.render('Bye');
@@ -1542,5 +1591,37 @@ describe('ReactCache', () => {
       'Cache cleanup: A [v2]',
     ]);
     expect(root).toMatchRenderedOutput('Bye!');
+  });
+
+  // @gate enableOffscreen
+  // @gate enableCache
+  test('prerender a new cache boundary inside an Offscreen tree', async () => {
+    function App({prerenderMore}) {
+      return (
+        <Offscreen mode="hidden">
+          <div>
+            {prerenderMore ? (
+              <Cache>
+                <AsyncText text="More" />
+              </Cache>
+            ) : null}
+          </div>
+        </Offscreen>
+      );
+    }
+
+    const root = ReactNoop.createRoot();
+    await act(async () => {
+      root.render(<App prerenderMore={false} />);
+    });
+    expect(Scheduler).toHaveYielded([]);
+    expect(root).toMatchRenderedOutput(<div hidden={true} />);
+
+    seedNextTextCache('More');
+    await act(async () => {
+      root.render(<App prerenderMore={true} />);
+    });
+    expect(Scheduler).toHaveYielded(['More']);
+    expect(root).toMatchRenderedOutput(<div hidden={true}>More</div>);
   });
 });

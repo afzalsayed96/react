@@ -13,13 +13,9 @@
 // Flags that can likely be deleted or landed without consequences
 // -----------------------------------------------------------------------------
 
-export const enableSuspenseServerRenderer = true;
-export const enableSelectiveHydration = true;
 export const warnAboutDeprecatedLifecycles = true;
-export const enableLazyElements = true;
 export const enableComponentStackLocations = true;
 export const disableSchedulerTimeoutBasedOnReactExpirationTime = false;
-export const enablePersistentOffscreenHostContainer = false;
 
 // -----------------------------------------------------------------------------
 // Land or remove (moderate effort)
@@ -28,21 +24,18 @@ export const enablePersistentOffscreenHostContainer = false;
 // like migrating internal callers or performance testing.
 // -----------------------------------------------------------------------------
 
+// This is blocked on adding a symbol polyfill to www.
+export const enableSymbolFallbackForWWW = false;
+
 // This rolled out to 10% public in www, so we should be able to land, but some
 // internal tests need to be updated. The open source behavior is correct.
 export const skipUnmountedBoundaries = true;
 
-// Destroy layout effects for components that are hidden because something
-// suspended in an update and recreate them when they are shown again (after the
-// suspended boundary has resolved). Note that this should be an uncommon use
-// case and can be avoided by using the transition API.
-//
 // TODO: Finish rolling out in www
-export const enableSuspenseLayoutEffectSemantics = true;
-
-// TODO: Finish rolling out in www
-export const enableClientRenderFallbackOnHydrationMismatch = true;
 export const enableClientRenderFallbackOnTextMismatch = true;
+
+// TODO: Need to review this code one more time before landing
+export const enableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay = true;
 
 // Recoil still uses useMutableSource in www, need to delete
 export const enableUseMutableSource = false;
@@ -122,6 +115,8 @@ export const enableCPUSuspense = __EXPERIMENTAL__;
 // It's an enum so that we can experiment with different levels of
 // aggressiveness.
 export const deletedTreeCleanUpLevel = 3;
+
+export const enableFloat = __EXPERIMENTAL__;
 
 // -----------------------------------------------------------------------------
 // Chopping Block

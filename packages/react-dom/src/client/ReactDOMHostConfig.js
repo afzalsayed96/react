@@ -40,6 +40,7 @@ import {
   warnForDeletedHydratableText,
   warnForInsertedHydratedElement,
   warnForInsertedHydratedText,
+  getOwnerDocumentFromRootContainer,
 } from './ReactDOMComponent';
 import {getSelectionInformation, restoreSelection} from './ReactInputSelection';
 import setTextContent from './setTextContent';
@@ -62,10 +63,9 @@ import dangerousStyleValue from '../shared/dangerousStyleValue';
 import {retryIfBlockedOn} from '../events/ReactDOMEventReplaying';
 
 import {
-  enableClientRenderFallbackOnHydrationMismatch,
-  enableSuspenseServerRenderer,
   enableCreateEventHandleAPI,
   enableScopeAPI,
+  enableFloat,
 } from 'shared/ReactFeatureFlags';
 import {HostComponent, HostText} from 'react-reconciler/src/ReactWorkTags';
 import {listenToAllSupportedEvents} from '../events/DOMPluginEventSystem';
@@ -183,7 +183,6 @@ export function getRootHostContext(
 export function getChildHostContext(
   parentHostContext: HostContext,
   type: string,
-  rootContainerInstance: Container,
 ): HostContext {
   if (__DEV__) {
     const parentHostContextDev = ((parentHostContext: any): HostContextDev);
@@ -291,10 +290,9 @@ export function finalizeInitialChildren(
   domElement: Instance,
   type: string,
   props: Props,
-  rootContainerInstance: Container,
   hostContext: HostContext,
 ): boolean {
-  setInitialProperties(domElement, type, props, rootContainerInstance);
+  setInitialProperties(domElement, type, props);
   switch (type) {
     case 'button':
     case 'input':
@@ -313,7 +311,6 @@ export function prepareUpdate(
   type: string,
   oldProps: Props,
   newProps: Props,
-  rootContainerInstance: Container,
   hostContext: HostContext,
 ): null | Array<mixed> {
   if (__DEV__) {
@@ -331,13 +328,7 @@ export function prepareUpdate(
       validateDOMNesting(null, string, ownAncestorInfo);
     }
   }
-  return diffProperties(
-    domElement,
-    type,
-    oldProps,
-    newProps,
-    rootContainerInstance,
-  );
+  return diffProperties(domElement, type, oldProps, newProps);
 }
 
 export function shouldSetTextContent(type: string, props: Props): boolean {
@@ -674,9 +665,8 @@ export function clearContainer(container: Container): void {
   if (container.nodeType === ELEMENT_NODE) {
     ((container: any): Element).textContent = '';
   } else if (container.nodeType === DOCUMENT_NODE) {
-    const body = ((container: any): Document).body;
-    if (body != null) {
-      body.textContent = '';
+    if (container.documentElement) {
+      container.removeChild(container.documentElement);
     }
   }
 }
@@ -686,6 +676,14 @@ export function clearContainer(container: Container): void {
 // -------------------
 
 export const supportsHydration = true;
+
+export function isHydratableResource(type: string, props: Props) {
+  return (
+    type === 'link' &&
+    typeof (props: any).precedence === 'string' &&
+    (props: any).rel === 'stylesheet'
+  );
+}
 
 export function canHydrateInstance(
   instance: HydratableInstance,
@@ -733,6 +731,45 @@ export function isSuspenseInstanceFallback(instance: SuspenseInstance) {
   return instance.data === SUSPENSE_FALLBACK_START_DATA;
 }
 
+export function getSuspenseInstanceFallbackErrorDetails(
+  instance: SuspenseInstance,
+): {digest: ?string, message?: string, stack?: string} {
+  const dataset =
+    instance.nextSibling && ((instance.nextSibling: any): HTMLElement).dataset;
+  let digest, message, stack;
+  if (dataset) {
+    digest = dataset.dgst;
+    if (__DEV__) {
+      message = dataset.msg;
+      stack = dataset.stck;
+    }
+  }
+  if (__DEV__) {
+    return {
+      message,
+      digest,
+      stack,
+    };
+  } else {
+    // Object gets DCE'd if constructed in tail position and matches callsite destructuring
+    return {
+      digest,
+    };
+  }
+
+  // let value = {message: undefined, hash: undefined};
+  // const nextSibling = instance.nextSibling;
+  // if (nextSibling) {
+  //   const dataset = ((nextSibling: any): HTMLTemplateElement).dataset;
+  //   value.message = dataset.msg;
+  //   value.hash = dataset.hash;
+  //   if (__DEV__) {
+  //     value.stack = dataset.stack;
+  //   }
+  // }
+  // return value;
+}
+
 export function registerSuspenseInstanceRetry(
   instance: SuspenseInstance,
   callback: () => void,
@@ -742,24 +779,37 @@ export function registerSuspenseInstanceRetry(
 
 function getNextHydratable(node) {
   // Skip non-hydratable nodes.
-  for (; node != null; node = node.nextSibling) {
+  for (; node != null; node = ((node: any): Node).nextSibling) {
     const nodeType = node.nodeType;
-    if (nodeType === ELEMENT_NODE || nodeType === TEXT_NODE) {
-      break;
-    }
-    if (enableSuspenseServerRenderer) {
-      if (nodeType === COMMENT_NODE) {
-        const nodeData = (node: any).data;
+    if (enableFloat) {
+      if (nodeType === ELEMENT_NODE) {
         if (
-          nodeData === SUSPENSE_START_DATA ||
-          nodeData === SUSPENSE_FALLBACK_START_DATA ||
-          nodeData === SUSPENSE_PENDING_START_DATA
+          ((node: any): Element).tagName === 'LINK' &&
+          ((node: any): Element).hasAttribute('data-rprec')
         ) {
-          break;
+          continue;
         }
-        if (nodeData === SUSPENSE_END_DATA) {
-          return null;
-        }
+        break;
+      }
+      if (nodeType === TEXT_NODE) {
+        break;
+      }
+    } else {
+      if (nodeType === ELEMENT_NODE || nodeType === TEXT_NODE) {
+        break;
+      }
+    }
+    if (nodeType === COMMENT_NODE) {
+      const nodeData = (node: any).data;
+      if (
+        nodeData === SUSPENSE_START_DATA ||
+        nodeData === SUSPENSE_FALLBACK_START_DATA ||
+        nodeData === SUSPENSE_PENDING_START_DATA
+      ) {
+        break;
+      }
+      if (nodeData === SUSPENSE_END_DATA) {
+        return null;
       }
     }
   }
@@ -794,7 +844,6 @@ export function hydrateInstance(
   instance: Instance,
   type: string,
   props: Props,
-  rootContainerInstance: Container,
   hostContext: HostContext,
   internalInstanceHandle: Object,
   shouldWarnDev: boolean,
@@ -821,7 +870,6 @@ export function hydrateInstance(
     type,
     props,
     parentNamespace,
-    rootContainerInstance,
     isConcurrentMode,
     shouldWarnDev,
   );
@@ -848,6 +896,43 @@ export function hydrateSuspenseInstance(
   internalInstanceHandle: Object,
 ) {
   precacheFiberNode(internalInstanceHandle, suspenseInstance);
+}
+
+export function getMatchingResourceInstance(
+  type: string,
+  props: Props,
+  rootHostContainer: Container,
+): ?Instance {
+  if (enableFloat) {
+    switch (type) {
+      case 'link': {
+        if (typeof (props: any).href !== 'string') {
+          return null;
+        }
+        const selector = `link[rel="stylesheet"][data-rprec][href="${
+          (props: any).href
+        }"]`;
+        const link = getOwnerDocumentFromRootContainer(
+          rootHostContainer,
+        ).querySelector(selector);
+        if (__DEV__) {
+          const allLinks = getOwnerDocumentFromRootContainer(
+            rootHostContainer,
+          ).querySelectorAll(selector);
+          if (allLinks.length > 1) {
+            console.error(
+              'Stylesheet resources need a unique representation in the DOM while hydrating' +
+                ' and more than one matching DOM Node was found. To fix, ensure you are only' +
+                ' rendering one stylesheet link with an href attribute of "%s".',
+              (props: any).href,
+            );
+          }
+        }
+        return link;
+      }
+    }
+  }
+  return null;
 }
 
 export function getNextHydratableInstanceAfterSuspenseInstance(
@@ -937,8 +1022,8 @@ export function didNotMatchHydratedContainerTextInstance(
   textInstance: TextInstance,
   text: string,
   isConcurrentMode: boolean,
+  shouldWarnDev: boolean,
 ) {
-  const shouldWarnDev = true;
   checkForUnmatchedText(
     textInstance.nodeValue,
     text,
@@ -954,9 +1039,9 @@ export function didNotMatchHydratedTextInstance(
   textInstance: TextInstance,
   text: string,
   isConcurrentMode: boolean,
+  shouldWarnDev: boolean,
 ) {
   if (parentProps[SUPPRESS_HYDRATION_WARNING] !== true) {
-    const shouldWarnDev = true;
     checkForUnmatchedText(
       textInstance.nodeValue,
       text,
@@ -1008,10 +1093,7 @@ export function didNotHydrateInstance(
   isConcurrentMode: boolean,
 ) {
   if (__DEV__) {
-    if (
-      (enableClientRenderFallbackOnHydrationMismatch && isConcurrentMode) ||
-      parentProps[SUPPRESS_HYDRATION_WARNING] !== true
-    ) {
+    if (isConcurrentMode || parentProps[SUPPRESS_HYDRATION_WARNING] !== true) {
       if (instance.nodeType === ELEMENT_NODE) {
         warnForDeletedHydratableElement(parentInstance, (instance: any));
       } else if (instance.nodeType === COMMENT_NODE) {
@@ -1092,10 +1174,7 @@ export function didNotFindHydratableInstance(
   isConcurrentMode: boolean,
 ) {
   if (__DEV__) {
-    if (
-      (enableClientRenderFallbackOnHydrationMismatch && isConcurrentMode) ||
-      parentProps[SUPPRESS_HYDRATION_WARNING] !== true
-    ) {
+    if (isConcurrentMode || parentProps[SUPPRESS_HYDRATION_WARNING] !== true) {
       warnForInsertedHydratedElement(parentInstance, type, props);
     }
   }
@@ -1109,10 +1188,7 @@ export function didNotFindHydratableTextInstance(
   isConcurrentMode: boolean,
 ) {
   if (__DEV__) {
-    if (
-      (enableClientRenderFallbackOnHydrationMismatch && isConcurrentMode) ||
-      parentProps[SUPPRESS_HYDRATION_WARNING] !== true
-    ) {
+    if (isConcurrentMode || parentProps[SUPPRESS_HYDRATION_WARNING] !== true) {
       warnForInsertedHydratedText(parentInstance, text);
     }
   }

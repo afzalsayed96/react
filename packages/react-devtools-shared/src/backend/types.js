@@ -93,7 +93,7 @@ export type Lane = number;
 export type Lanes = number;
 
 export type ReactRenderer = {
-  findFiberByHostInstance: (hostInstance: NativeType) => ?Fiber,
+  findFiberByHostInstance: (hostInstance: NativeType) => Fiber | null,
   version: string,
   rendererPackageName: string,
   bundleType: BundleType,
@@ -289,8 +289,9 @@ export type InspectElementError = {|
   id: number,
   responseID: number,
   type: 'error',
+  errorType: 'user' | 'unknown-hook' | 'uncaught',
   message: string,
-  stack: string,
+  stack?: string,
 |};
 
 export type InspectElementFullData = {|
@@ -349,6 +350,7 @@ export type RendererInterface = {
   findNativeNodesForFiberID: FindNativeNodesForFiberID,
   flushInitialOperations: () => void,
   getBestMatchForTrackedPath: () => PathMatch | null,
+  getFiberForNative: (component: NativeType) => Fiber | null,
   getFiberIDForNative: GetFiberIDForNative,
   getDisplayNameForFiberID: GetDisplayNameForFiberID,
   getInstanceAndStyle(id: number): InstanceAndStyle,

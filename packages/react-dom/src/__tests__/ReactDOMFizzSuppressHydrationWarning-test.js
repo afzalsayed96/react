@@ -29,9 +29,7 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     Scheduler = require('scheduler');
     React = require('react');
     ReactDOMClient = require('react-dom/client');
-    if (__EXPERIMENTAL__) {
-      ReactDOMFizzServer = require('react-dom/server');
-    }
+    ReactDOMFizzServer = require('react-dom/server');
     Stream = require('stream');
 
     // Test Environment
@@ -127,7 +125,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
       : children;
   }
 
-  // @gate experimental
   it('suppresses and fixes text mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -167,7 +164,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('suppresses and fixes multiple text node mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -209,7 +205,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('errors on text-to-element mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -240,23 +235,18 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Expected server HTML to contain a matching <span> in <span>',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Expected server HTML to contain a matching <span> in <span>',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <span>
@@ -266,7 +256,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('suppresses and fixes client-only single text node mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -302,7 +291,7 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
   });
 
   // TODO: This behavior is not consistent with client-only single text node.
-  // @gate experimental
+
   it('errors on server-only single text node mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -329,23 +318,18 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Did not expect server HTML to contain the text node "Server" in <span>',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Did not expect server HTML to contain the text node "Server" in <span>',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <span />
@@ -353,7 +337,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('errors on client-only extra text node mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -383,23 +366,18 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Expected server HTML to contain a matching text node for "Client" in <span>.',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Expected server HTML to contain a matching text node for "Client" in <span>.',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <span>
@@ -410,7 +388,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('errors on server-only extra text node mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -440,23 +417,18 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Did not expect server HTML to contain the text node "Server" in <span>.',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Did not expect server HTML to contain the text node "Server" in <span>.',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <span>
@@ -466,7 +438,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('errors on element-to-text mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -495,24 +466,19 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Expected server HTML to contain a matching text node for "Client" in <span>.',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Expected server HTML to contain a matching text node for "Client" in <span>.',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <span>
@@ -524,7 +490,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('suppresses and does not fix attribute mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -563,7 +528,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('suppresses and does not fix html mismatches with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -601,7 +565,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('errors on insertions with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -627,23 +590,18 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Expected server HTML to contain a matching <p> in <div>.',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Expected server HTML to contain a matching <p> in <div>.',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <p>Client and server</p>
@@ -652,7 +610,6 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
     );
   });
 
-  // @gate experimental
   it('errors on deletions with suppressHydrationWarning', async () => {
     function App({isClient}) {
       return (
@@ -679,23 +636,18 @@ describe('ReactDOMFizzServerHydrationWarning', () => {
         Scheduler.unstable_yieldValue(error.message);
       },
     });
-    if (gate(flags => flags.enableClientRenderFallbackOnHydrationMismatch)) {
-      expect(() => {
-        expect(Scheduler).toFlushAndYield([
-          'Hydration failed because the initial UI does not match what was rendered on the server.',
-          'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
-        ]);
-      }).toErrorDev(
-        [
-          'Did not expect server HTML to contain a <p> in <div>.',
-          'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
-        ],
-        {withoutStack: 1},
-      );
-    } else {
-      // This used to not warn.
-      expect(Scheduler).toFlushAndYield([]);
-    }
+    expect(() => {
+      expect(Scheduler).toFlushAndYield([
+        'Hydration failed because the initial UI does not match what was rendered on the server.',
+        'There was an error while hydrating. Because the error happened outside of a Suspense boundary, the entire root will switch to client rendering.',
+      ]);
+    }).toErrorDev(
+      [
+        'Did not expect server HTML to contain a <p> in <div>.',
+        'An error occurred during hydration. The server HTML was replaced with client content in <div>.',
+      ],
+      {withoutStack: 1},
+    );
     expect(getVisibleChildren(container)).toEqual(
       <div>
         <p>Client and server</p>
